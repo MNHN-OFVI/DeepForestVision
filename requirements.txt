@@ -1,0 +1,9 @@
+opencv-python
+numpy
+pandas
+Pillow
+PytorchWildlife
+supervision
+torch
+tqdm
+transformers
