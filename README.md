@@ -1,10 +1,13 @@
 # DeepForestVision
 
 ## Foreword
-DeepForestVision is developed under CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0) by an academic team from the French Muséum National d'Histoire Naturelle (MNHN) as part of the One Forest Vision initiative (https://www.oneforestvision.org).
+DeepForestVision is an AI model designed to identify wildlife on camera trap videos and images from African tropical forests.
+
+It is developed under CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0) by an academic team from the French Muséum National d'Histoire Naturelle (MNHN) as part of the One Forest Vision initiative (https://www.oneforestvision.org).
 
 DeepForestVision is available in the AddaxAI interface (https://addaxdatascience.com/addaxai/) that can be run on Windows, Linux and MacOS without programming knowledge. This Github page provides the model weights and inference code.
 
+Contacts: hugo.magaldi@mnhn.fr; sabrina.krief@mnhnh.fr
 
 ## Using DeepForestVision
 
