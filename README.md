@@ -8,7 +8,7 @@ DeepForestVision is available in the AddaxAI interface (https://addaxdatascience
 
 ## Using DeepForestVision
 
-1) Make sure the dependencies in requirements.text are installed. If the *PytorchWildlife* library fails to install *boto3*,
+1) Install the dependencies from requirements.text. If the *PytorchWildlife* library fails to install *boto3*,
 please install the dependencies *without* a virtual environment.
 2) Run DFV.py to predict taxa from photos and videos using the following optional arguments:
    
