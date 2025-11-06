@@ -24,7 +24,7 @@ parser.add_argument('--detection_threshold', type=float, default=.2, help='Detec
 parser.add_argument('--stride', type=float, default=1, help='Stride of frames extraction for videos (in seconds)')
 args = parser.parse_args()
 data_dir, predictions_dir, detection_threshold, stride = args.data_dir, args.predictions_dir, args.detection_threshold, args.stride
-images_max = 3000
+images_max = 8000
 extensions_photos = ('.jpg', '.JPG', '.jpeg', '.JPEG'', .png', '.PNG')
 extensions_videos = ('.avi', '.AVI', '.mov', '.MOV', '.mp4', '.MP4')
 
@@ -54,16 +54,18 @@ def predict_images(images_dir, detections_dir, data_dir, predictions):
     """
     print('Detecting...')
     detections_list = detection_model.batch_image_detection(data_path=images_dir, batch_size=32, det_conf_thres = detection_threshold)
-    detections_dict = save_cropped_images(detections=detections_list, detections_dir =  detections_dir)
+    detections_dict, frames_dict = save_cropped_images(detections=detections_list, detections_dir =  detections_dir)
     detections_images = list_photos_videos(detections_dir, extensions_photos+extensions_videos)
     for i in tqdm(range(len(detections_images)), desc='Classifying...', unit='step', colour='yellow'):
         detection = detections_images[i]
         filename = detection.split('_', 3)[3][:-4]
         filepath = os.path.join(data_dir, filename)
         frame = detection.split('_')[2][1:]
+        frame_all = detection.split('_', 2)[2]
         detection_info = detections_dict[detection]
         detection_class = detection_info[0]
         detection_score = detection_info[1]
+        nb_ind_frame = frames_dict[frame_all]
         if detection_class == 1:
             detection_class_str = 'human'
             classification_scores = [0]*taxons_count + [1,0]
@@ -73,12 +75,13 @@ def predict_images(images_dir, detections_dir, data_dir, predictions):
         elif detection_class == 0:
             detection_class_str = 'animal'
             detection_image = Image.open(os.path.join(detections_dir, detection))
+            # detection_image.show()
             # pred_all = pipe(image)
             inputs = image_processor(images = detection_image, return_tensors = 'pt').to(device)
             logits = pipe.model(**inputs).logits
             classification_scores = torch.nn.functional.softmax(logits, dim=-1)
             classification_scores = classification_scores.cpu().tolist()[0]+[0,0]
-        prediction = pd.DataFrame([[filepath, filename, frame, detection_class_str, detection_score]+ list(detection_score*np.array(classification_scores))], columns=list(predictions.columns))
+        prediction = pd.DataFrame([[filepath, filename, frame, detection_class_str, detection_score]+ list(detection_score*np.array(classification_scores))+[nb_ind_frame]], columns=list(predictions.columns))
         predictions = pd.concat([predictions, prediction])
     clean_dir(images_dir)
     clean_dir(detections_dir)
@@ -90,38 +93,52 @@ clean_dir(images_dir)
 clean_dir(detections_dir)
 os.makedirs(predictions_dir, exist_ok=True)
 timestamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-predictions = pd.DataFrame(columns=['Filepath', 'Filename', 'Frame', 'Detection class', 'Detection score'] + taxons_all)
+predictions = pd.DataFrame(columns=['Filepath', 'Filename', 'Frame', 'Detection class', 'Detection score'] + taxons_all + ['Number of individuals'])
 filepaths_all = []
+err_list=[]
 
 # Loop though data subdirectories, detect and classify
 print('USING DETECTION THRESHOLD '+ str(detection_threshold) + ' AND STRIDE '+ str(stride))
-data_subdirs = [x[0] for x in os.walk(data_dir)]
+data_subdirs = sorted([x[0] for x in os.walk(data_dir)])
 for data_subir in data_subdirs:
     print('PROCESSING FOLDER ' + str(data_subir))
     images_count = 0
     files = list_photos_videos(data_subir, extensions_photos+extensions_videos)
     for i in tqdm(range(len(files)), desc='Extracting frames...', unit='step', colour='green'):
-        file = files[i]
-        filepath = os.path.join(data_subir, file)
-        filepaths_all.append(filepath)
         if images_count > images_max:
+            print('Max frames capacity reached, switching to inference')
             predictions = predict_images(images_dir = images_dir, detections_dir = detections_dir, data_dir = data_subir, predictions= predictions)
+            predictions.to_csv(os.path.join(predictions_dir, 'predictions_raw_' + 'stride_' + str(stride) + '_thresh_' + str(detection_threshold) + '_' + timestamp + '.csv'), index=False)
             images_count = 0
+        file = files[i]
+        filepath = (os.path.join(data_subir, file))
         if file.endswith(extensions_photos):
-            shutil.copy(filepath, os.path.join(images_dir, 'F0_' + file+'.JPG'))
-            images_count += 1
+            try:
+                image = Image.open(filepath)
+                filepaths_all.append(filepath)
+                shutil.copy(filepath, os.path.join(images_dir, 'F0_' + file+'.JPG'))
+                images_count += 1
+            except:
+                err_list.append(filepath)
         else:
             video = cv2.VideoCapture(filepath)
-            fps = video.get(cv2.CAP_PROP_FPS)
-            total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-            idx = 0
-            for index, frame in enumerate(video_utils.get_video_frames_generator(source_path=filepath, stride=int(stride*fps))):
-                ImageSink(target_dir_path=images_dir, overwrite=False).save_image(image=frame,image_name='F'+str(idx)+'_'+file+'.JPG')
-                idx += 1
-                images_count += 1
+            is_opened = video.isOpened()
+            ret, frame = video.read()
+            if is_opened and ret:
+                filepaths_all.append(filepath)
+                fps = video.get(cv2.CAP_PROP_FPS)
+                total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+                idx = 0
+                for index, frame in enumerate(video_utils.get_video_frames_generator(source_path=filepath, stride=int(stride*fps))):
+                    ImageSink(target_dir_path=images_dir, overwrite=False).save_image(image=frame,image_name='F'+str(idx)+'_'+file+'.JPG')
+                    idx += 1
+                    images_count += 1
+            else:
+                err_list.append(filepath)
+                print('COULD NOT OPEN: '+ filepath)
     predictions = predict_images(images_dir = images_dir, detections_dir = detections_dir, data_dir = data_subir, predictions= predictions)
     images_count = 0
-    # predictions.to_csv(os.path.join(predictions_dir, 'predictions_raw' + timestamp + '.csv'), index = False)
+    predictions.to_csv(os.path.join(predictions_dir, 'predictions_raw_' + 'stride_' + str(stride) + '_thresh_' + str(detection_threshold)+ '_' + timestamp + '.csv'), index = False)
 
 
 print('CONSOLIDATING PREDICTIONS')
@@ -131,6 +148,7 @@ gpby_dict['Filepath'] = 'first'
 gpby_dict['Filename'] = 'first'
 for taxon in taxons+['human', 'vehicle']:
     gpby_dict[taxon] = ['mean']
+gpby_dict['Number of individuals'] = ['max']
 predictions_grouped = predictions.groupby('Filepath').agg(gpby_dict)
 predictions_grouped['Prediction'] = predictions_grouped[taxons_all].apply(lambda x: 'blank' if sum(x)==0 else taxons_all[np.argmax(x)], axis=1)
 predictions_grouped['Confidence score'] = predictions_grouped[taxons_all].apply(lambda x: 'blank' if sum(x)==0 else np.max(x), axis=1)
@@ -138,9 +156,14 @@ predictions_grouped.columns = [predictions_grouped.columns[i][0] for i in range(
 # Predict as 'blank' photos/videos for which there were no detections
 for filepath in filepaths_all:
     if filepath not in predictions_grouped['Filepath']:
-        prediction_blank = pd.DataFrame([[filepath, filepath.rsplit(os.sep,1)[1]]+ [0]*(taxons_count+2) + ['blank', 1-detection_threshold]], columns=list(predictions_grouped.columns))
+        prediction_blank = pd.DataFrame([[filepath, filepath.rsplit(os.sep,1)[1]]+ [0]*(taxons_count+2) + [0] + ['blank', 1-detection_threshold]], columns=list(predictions_grouped.columns))
         predictions_grouped = pd.concat([predictions_grouped, prediction_blank])
 predictions_grouped = predictions_grouped.reset_index(drop=True)
 predictions_grouped = predictions_grouped.sort_values(by='Filepath', axis=0)
 predictions_grouped.to_csv(os.path.join(predictions_dir, 'predictions_' + 'stride_' + str(stride) + '_thresh_' + str(detection_threshold)+ '_' + timestamp + '.csv'), index = False)
 print('PREDICTIONS SUCCESSFULLY SAVED TO FOLDER: '+str(predictions_dir))
+if len(err_list)== 0:
+    print('All photo and video files were processed successfully')
+else:
+    print('The following files could not be opened: ')
+    print(err_list)

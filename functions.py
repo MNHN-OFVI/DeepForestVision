@@ -37,9 +37,13 @@ def save_cropped_images(detections, detections_dir):
     Args:
         detections (list): Detection results containing image ID and detections.
         detections_dir (str): Directory where to save the cropped images.
-    Output: detections_dict (dict): Dictionary mapping each detection filename to the detection's class (animal, human or vehicle) and its detection score. .
+    Outputs:
+        detections_dict (dict): Dictionary mapping each detection filename to the detection's class (animal, human or vehicle) and its detection score.
+        frames_dict (dict): Dictionary counting the number of detections by frame.
+
     """
     detections_dict = {}
+    frames_dict = {}
     with ImageSink(target_dir_path=detections_dir, overwrite=False) as sink:
         for entry in detections:
             for i, (xyxy, _, detection_score, detection_class, _, _) in enumerate(entry["detections"]):
@@ -53,4 +57,5 @@ def save_cropped_images(detections, detections_dir):
                     image_name=image_name,
                     ),
                 detections_dict[image_name] = [detection_class, detection_score]
-    return detections_dict
+                frames_dict[entry["img_id"].split('/')[-1]] = frames_dict.get(entry["img_id"].split('/')[-1], 0)+1
+    return detections_dict, frames_dict
