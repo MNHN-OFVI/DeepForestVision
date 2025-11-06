@@ -7,7 +7,7 @@ It is developed under CC BY-NC-SA 4.0 license (https://creativecommons.org/licen
 
 DeepForestVision is available in the AddaxAI interface (https://addaxdatascience.com/addaxai/) that can be run on Windows, Linux and MacOS without programming knowledge. This Github page provides the model weights and inference code.
 
-Contacts: hugo.magaldi@mnhn.fr; sabrina.krief@mnhnh.fr
+Contacts: hugo.magaldi@mnhn.fr; sabrina.krief@mnhn.fr
 
 ## Using DeepForestVision
 
